@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PhoneCamBridge - Phone</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="app">
+    <h1>PhoneCamBridge</h1>
+    <div id="status">Ready</div>
+    <video id="local-video" autoplay playsinline muted></video>
+    <div class="controls">
+      <button id="start-camera" class="primary">Start Camera</button>
+      <button id="switch-camera" disabled>Switch Camera</button>
+      <button id="reconnect">Reconnect</button>
+    </div>
+    <div id="error"></div>
+  </div>
+  <script src="/shared.js"></script>
+  <script src="/phone.js"></script>
+</body>
+</html>

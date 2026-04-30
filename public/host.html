@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PhoneCamBridge - Host</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="app">
+    <h1>PhoneCamBridge</h1>
+    <div id="status">Loading...</div>
+    <div id="room-info">
+      <div><span class="label">Room:</span> <span id="room-id"></span></div>
+      <div><span class="label">Phone URL:</span> <span id="phone-url"></span></div>
+      <div><span class="label">OBS URL:</span> <span id="obs-url"></span></div>
+    </div>
+    <div id="qr"></div>
+    <video id="video" autoplay playsinline></video>
+    <div class="controls">
+      <button id="copy-link" class="primary">Copy Phone Link</button>
+      <button id="open-obs">Open OBS View</button>
+      <button id="new-room" class="danger">New Room</button>
+    </div>
+    <div id="lan-urls"></div>
+  </div>
+  <script src="/shared.js"></script>
+  <script src="/host.js"></script>
+</body>
+</html>
