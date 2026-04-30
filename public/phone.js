@@ -10,15 +10,19 @@
   const localVideo = document.getElementById('local-video');
   const errorEl = document.getElementById('error');
   const startBtn = document.getElementById('start-camera');
-  const switchBtn = document.getElementById('switch-camera');
   const reconnectBtn = document.getElementById('reconnect');
+  const cameraSelect = document.getElementById('camera-select');
+  const btnSelfie = document.getElementById('btn-selfie');
+  const btnBack = document.getElementById('btn-back');
+  const btnNext = document.getElementById('btn-next');
 
   let myId = null;
   let ws = null;
   let localStream = null;
   const pcMap = {};
   let pendingReceivers = [];
-  let currentFacing = 'environment';
+  let videoDevices = [];
+  let currentDeviceId = null;
 
   function setStatus(text, className) {
     statusEl.textContent = text;
@@ -35,29 +39,67 @@
     errorEl.className = '';
   }
 
-  function getVideoStream(facing) {
+  function friendlyLabel(device) {
+    const label = device.label || '';
+    if (!label) return 'Camera ' + (videoDevices.indexOf(device) + 1);
+    const lower = label.toLowerCase();
+    if (lower.includes('front') || lower.includes('selfie') || lower.includes('face')) return 'Selfie';
+    if (lower.includes('ultra') || lower.includes('wide') && !lower.includes('ultra')) return 'Ultra Wide';
+    if (lower.includes('tele')) {
+      if (lower.includes('3x') || lower.includes('3')) return 'Telephoto 3x';
+      if (lower.includes('5x') || lower.includes('5')) return 'Telephoto 5x';
+      return 'Telephoto';
+    }
+    if (lower.includes('back') || lower.includes('rear') || lower.includes('environment') || lower.includes('main') || lower.includes('primary')) return 'Primary / Wide';
+    return label.replace(/\s*\(.*?\)\s*/g, '').trim() || 'Camera ' + (videoDevices.indexOf(device) + 1);
+  }
+
+  function popupateCameraList() {
+    const prev = currentDeviceId;
+    cameraSelect.innerHTML = '';
+    cameraSelect.disabled = false;
+
+    videoDevices.forEach((dev, i) => {
+      const opt = document.createElement('option');
+      opt.value = dev.deviceId;
+      opt.textContent = friendlyLabel(dev);
+      if (dev.deviceId === prev) opt.selected = true;
+      cameraSelect.appendChild(opt);
+    });
+
+    if (!prev && videoDevices.length > 0) {
+      const backIdx = videoDevices.findIndex((d) => {
+        const l = (d.label || '').toLowerCase();
+        return l.includes('back') || l.includes('rear') || l.includes('environment');
+      });
+      const idx = backIdx >= 0 ? backIdx : 0;
+      cameraSelect.selectedIndex = idx;
+      currentDeviceId = videoDevices[idx].deviceId;
+    }
+  }
+
+  function getVideoStreamById(deviceId) {
     return navigator.mediaDevices.getUserMedia({
       video: {
-        facingMode: { ideal: facing },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
+        deviceId: { exact: deviceId },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
         frameRate: { ideal: 30 }
       },
       audio: false
     });
   }
 
-  async function startCamera(facing) {
+  async function startCameraById(deviceId) {
     hideError();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       showError('Camera API unavailable. Use HTTPS or a supported browser.');
       return null;
     }
     try {
-      const stream = await getVideoStream(facing);
+      const stream = await getVideoStreamById(deviceId);
       localVideo.srcObject = stream;
       localVideo.style.display = 'block';
-      switchBtn.disabled = false;
       startBtn.textContent = 'Camera Started';
       startBtn.disabled = true;
       return stream;
@@ -67,28 +109,48 @@
       } else if (err.name === 'NotFoundError') {
         showError('No camera found on this device.');
       } else {
-        showError(`Camera error: ${err.message}`);
+        showError('Camera error: ' + (err.message || 'unknown'));
       }
       return null;
     }
   }
 
-  async function switchCamera() {
-    const stream = localStream;
-    if (stream) stream.getTracks().forEach((t) => t.stop());
-    currentFacing = currentFacing === 'environment' ? 'user' : 'environment';
-    const newStream = await startCamera(currentFacing);
+  async function switchToDevice(deviceId) {
+    if (!deviceId || deviceId === currentDeviceId) return;
+    currentDeviceId = deviceId;
+
+    const oldTracks = localStream ? localStream.getVideoTracks() : [];
+    const newStream = await startCameraById(deviceId);
     if (!newStream) {
-      currentFacing = currentFacing === 'environment' ? 'user' : 'environment';
+      currentDeviceId = null;
       return;
     }
+
+    oldTracks.forEach((t) => t.stop());
+
     localStream = newStream;
-    const videoTrack = newStream.getVideoTracks()[0];
-    if (videoTrack) {
-      for (const pc of Object.values(pcMap)) {
+    const newTrack = newStream.getVideoTracks()[0];
+    if (!newTrack) return;
+
+    for (const pc of Object.values(pcMap)) {
+      try {
         const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
-        if (sender) sender.replaceTrack(videoTrack);
+        if (sender) {
+          await sender.replaceTrack(newTrack);
+        }
+      } catch {
+        console.warn('replaceTrack failed for a peer, recreating connection');
       }
+    }
+  }
+
+  async function enumerateCameras() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      videoDevices = devices.filter((d) => d.kind === 'videoinput');
+      popupateCameraList();
+    } catch {
+      videoDevices = [];
     }
   }
 
@@ -173,9 +235,30 @@
   }
 
   startBtn.onclick = async () => {
-    const stream = await startCamera(currentFacing);
+    if (!videoDevices.length) {
+      try {
+        await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      } catch {}
+      await enumerateCameras();
+    }
+
+    if (!videoDevices.length) {
+      showError('No cameras found.');
+      return;
+    }
+
+    const backIdx = videoDevices.findIndex((d) => {
+      const l = (d.label || '').toLowerCase();
+      return l.includes('back') || l.includes('rear') || l.includes('environment');
+    });
+    const idx = backIdx >= 0 ? backIdx : 0;
+    const deviceId = videoDevices[idx].deviceId;
+    currentDeviceId = deviceId;
+
+    const stream = await startCameraById(deviceId);
     if (stream) {
       localStream = stream;
+      popupateCameraList();
       const receivers = pendingReceivers.slice();
       pendingReceivers = [];
       for (const peerId of receivers) {
@@ -184,11 +267,51 @@
     }
   };
 
-  switchBtn.onclick = switchCamera;
+  cameraSelect.onchange = () => {
+    const deviceId = cameraSelect.value;
+    if (deviceId) switchToDevice(deviceId);
+  };
+
+  btnSelfie.onclick = async () => {
+    if (!videoDevices.length) return;
+    const idx = videoDevices.findIndex((d) => {
+      const l = (d.label || '').toLowerCase();
+      return l.includes('front') || l.includes('selfie') || l.includes('face') || l.includes('user');
+    });
+    const target = idx >= 0 ? idx : (videoDevices.length > 1 ? 1 : 0);
+    const deviceId = videoDevices[target].deviceId;
+    cameraSelect.value = deviceId;
+    await switchToDevice(deviceId);
+  };
+
+  btnBack.onclick = async () => {
+    if (!videoDevices.length) return;
+    const idx = videoDevices.findIndex((d) => {
+      const l = (d.label || '').toLowerCase();
+      return l.includes('back') || l.includes('rear') || l.includes('environment');
+    });
+    const target = idx >= 0 ? idx : 0;
+    const deviceId = videoDevices[target].deviceId;
+    cameraSelect.value = deviceId;
+    await switchToDevice(deviceId);
+  };
+
+  btnNext.onclick = async () => {
+    if (videoDevices.length < 2) return;
+    const curIdx = videoDevices.findIndex((d) => d.deviceId === currentDeviceId);
+    const nextIdx = (curIdx + 1) % videoDevices.length;
+    const deviceId = videoDevices[nextIdx].deviceId;
+    cameraSelect.value = deviceId;
+    await switchToDevice(deviceId);
+  };
+
   reconnectBtn.onclick = connect;
 
   if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     connect();
+    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      .then(() => enumerateCameras())
+      .catch(() => {});
   } else {
     showError('Camera API unavailable. Use HTTPS or a supported browser.');
   }

@@ -10,18 +10,50 @@
   <div id="app">
     <h1>PhoneCamBridge</h1>
     <div id="status">Loading...</div>
+
+    <div id="tunnel-status">
+      <span class="label">Tunnel:</span> <span id="tunnel-text">starting...</span>
+    </div>
+
     <div id="room-info">
       <div><span class="label">Room:</span> <span id="room-id"></span></div>
       <div><span class="label">Phone URL:</span> <span id="phone-url"></span></div>
       <div><span class="label">OBS URL:</span> <span id="obs-url"></span></div>
     </div>
+
     <div id="qr"></div>
     <video id="video" autoplay playsinline></video>
+
     <div class="controls">
       <button id="copy-link" class="primary">Copy Phone Link</button>
+      <button id="copy-obs-link">Copy OBS Link</button>
       <button id="open-obs">Open OBS View</button>
       <button id="new-room" class="danger">New Room</button>
     </div>
+
+    <div id="obs-controls">
+      <h3>OBS View Controls</h3>
+      <div class="control-group">
+        <span class="label">Fit:</span>
+        <button class="obs-fit-btn active" data-fit="contain">Contain</button>
+        <button class="obs-fit-btn" data-fit="cover">Cover</button>
+      </div>
+      <div class="control-group">
+        <span class="label">Mirror:</span>
+        <button id="obs-mirror-btn" data-mirror="false">Off</button>
+      </div>
+      <div class="control-group">
+        <span class="label">Rotate:</span>
+        <button class="obs-rotate-btn active" data-rotate="0">0°</button>
+        <button class="obs-rotate-btn" data-rotate="90">90°</button>
+        <button class="obs-rotate-btn" data-rotate="180">180°</button>
+        <button class="obs-rotate-btn" data-rotate="270">270°</button>
+      </div>
+      <div class="control-group">
+        <button id="obs-reset">Reset</button>
+      </div>
+    </div>
+
     <div id="lan-urls"></div>
   </div>
   <script src="/shared.js"></script>

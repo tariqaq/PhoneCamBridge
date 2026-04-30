@@ -6,14 +6,45 @@
     return;
   }
 
+  const wrap = document.getElementById('obs-video-wrap');
   const video = document.getElementById('video');
   const help = document.getElementById('help');
 
-  let fit = params.get('fit') || 'cover';
+  let fit = params.get('fit') || 'contain';
   let mirror = params.get('mirror') === 'true';
+  let rotate = parseInt(params.get('rotate')) || 0;
 
   function applyStyle() {
-    video.className = `fit-${fit}${mirror ? ' mirror' : ''}`;
+    video.style.objectFit = fit;
+    video.classList.toggle('mirror', mirror);
+
+    wrap.style.transform = '';
+    wrap.style.width = '';
+    wrap.style.height = '';
+    wrap.style.top = '';
+    wrap.style.left = '';
+
+    if (rotate === 0) {
+      video.style.width = '100%';
+      video.style.height = '100%';
+      video.style.transform = 'none';
+    } else if (rotate === 90) {
+      wrap.style.width = '100vh';
+      wrap.style.height = '100vw';
+      wrap.style.left = 'calc((100vw - 100vh) / 2)';
+      wrap.style.top = 'calc((100vh - 100vw) / 2)';
+      wrap.style.transform = 'rotate(90deg)';
+    } else if (rotate === 180) {
+      video.style.width = '100%';
+      video.style.height = '100%';
+      video.style.transform = 'rotate(180deg)';
+    } else if (rotate === 270) {
+      wrap.style.width = '100vh';
+      wrap.style.height = '100vw';
+      wrap.style.left = 'calc((100vw - 100vh) / 2)';
+      wrap.style.top = 'calc((100vh - 100vw) / 2)';
+      wrap.style.transform = 'rotate(270deg)';
+    }
   }
 
   applyStyle();
@@ -25,9 +56,19 @@
     welcome(msg) {
       myId = msg.clientId;
     },
-    'peer-joined'(msg) {
-      if (msg.role === 'phone') {
-      }
+    'obs-settings-current'(msg) {
+      const s = msg.settings;
+      if (s.fit !== undefined) fit = s.fit;
+      if (s.mirror !== undefined) mirror = s.mirror;
+      if (s.rotate !== undefined) rotate = s.rotate;
+      applyStyle();
+    },
+    'obs-settings-update'(msg) {
+      const s = msg.settings;
+      if (s.fit !== undefined) fit = s.fit;
+      if (s.mirror !== undefined) mirror = s.mirror;
+      if (s.rotate !== undefined) rotate = s.rotate;
+      applyStyle();
     },
     offer(msg) {
       if (pc) { pc.close(); pc = null; }

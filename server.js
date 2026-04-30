@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
+const localtunnel = require('localtunnel');
 const os = require('os');
 const path = require('path');
 
@@ -10,6 +11,12 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 app.use(express.static(path.join(__dirname, 'public')));
+
+const serverConfig = {
+  localUrl: null,
+  publicUrl: null,
+  usingTunnel: false
+};
 
 app.get('/', (req, res) => {
   res.redirect('/host');
@@ -25,6 +32,10 @@ app.get('/phone', (req, res) => {
 
 app.get('/obs', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'obs.html'));
+});
+
+app.get('/api/config', (req, res) => {
+  res.json(serverConfig);
 });
 
 app.get('/api/qr', async (req, res) => {
@@ -87,6 +98,9 @@ wss.on('connection', (ws) => {
       case 'ice':
         handleRelay(ws, msg);
         break;
+      case 'obs-settings-update':
+        handleObsSettingsUpdate(ws, msg);
+        break;
     }
   });
 
@@ -122,6 +136,13 @@ function handleJoin(ws, msg) {
       }));
     }
   }
+
+  if (role === 'receiver' && rooms[room].obsSettings) {
+    ws.send(JSON.stringify({
+      type: 'obs-settings-current',
+      settings: rooms[room].obsSettings
+    }));
+  }
 }
 
 function handleRelay(ws, msg) {
@@ -131,6 +152,22 @@ function handleRelay(ws, msg) {
   const target = rooms[room][to];
   if (target) {
     target.ws.send(JSON.stringify(msg));
+  }
+}
+
+function handleObsSettingsUpdate(ws, msg) {
+  const { room, settings } = msg;
+  if (!room || !settings || !rooms[room]) return;
+
+  rooms[room].obsSettings = settings;
+
+  for (const [id, client] of Object.entries(rooms[room])) {
+    if (id !== ws.clientId && client.role === 'receiver') {
+      client.ws.send(JSON.stringify({
+        type: 'obs-settings-update',
+        settings
+      }));
+    }
   }
 }
 
@@ -149,7 +186,29 @@ function handleDisconnect(ws) {
   }
 }
 
+async function startTunnel(port) {
+  try {
+    const tunnel = await localtunnel({ port });
+    serverConfig.publicUrl = tunnel.url.replace(/\/$/, '');
+    serverConfig.usingTunnel = true;
+    console.log(`\nTunnel URL: ${serverConfig.publicUrl}/host`);
+    console.log(`Phone URL: ${serverConfig.publicUrl}/phone?room=ROOM_ID`);
+    console.log(`OBS URL: ${serverConfig.publicUrl}/obs?room=ROOM_ID`);
+
+    tunnel.on('close', () => {
+      serverConfig.publicUrl = null;
+      serverConfig.usingTunnel = false;
+      console.log('\nTunnel closed.');
+    });
+  } catch (err) {
+    console.log(`\nTunnel failed: ${err.message}`);
+    console.log('Phone camera may require HTTPS for camera access.');
+    console.log('See README for HTTPS setup alternatives.');
+  }
+}
+
 const PORT = process.env.PORT || 3000;
+serverConfig.localUrl = `http://localhost:${PORT}`;
 
 server.listen(PORT, '0.0.0.0', () => {
   const lanUrls = getLANUrls();
@@ -161,4 +220,6 @@ server.listen(PORT, '0.0.0.0', () => {
     }
   }
   console.log(`  http://localhost:${PORT}/host`);
+
+  startTunnel(PORT);
 });

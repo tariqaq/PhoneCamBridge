@@ -20,11 +20,13 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000/host` on your PC.
+The app automatically starts a LocalTunnel so your phone camera works over HTTPS.
+
+Open the printed tunnel URL (or `http://localhost:3000/host`) on your PC.
 
 Scan the QR code with your phone.
 
-In OBS, add a Browser Source pointing to the OBS URL shown on the host page, or use Window Capture.
+In OBS, add a Browser Source pointing to the OBS URL shown on the host page.
 
 ### Windows
 
@@ -33,7 +35,7 @@ In OBS, add a Browser Source pointing to the OBS URL shown on the host page, or 
 3. Clone or download this project.
 4. Run `npm install`.
 5. Run `npm run dev`.
-6. Open `http://localhost:3000/host` in a browser.
+6. Open the printed tunnel `/host` URL (or `http://localhost:3000/host`) in a browser.
 7. Scan the QR code with your phone.
 8. In OBS, add a Browser Source or Window Capture for `/obs?room=...`.
 9. Click Start Virtual Camera in OBS.
@@ -73,55 +75,99 @@ Then:
 PORT=8080 npm run dev
 ```
 
-## OBS View
+## How it works
 
-The OBS page at `/obs?room=ROOM_ID` is designed for Browser Source capture. It supports query parameters:
+1. Run `npm run dev` — the app starts a local server and automatically creates a LocalTunnel.
+2. The terminal prints the local URL and the tunnel URL.
+3. Open the tunnel `/host` URL on your PC — it shows a room ID, QR code, phone link, and OBS link.
+4. Scan the QR code with your phone — opens the tunnel `/phone` page over HTTPS.
+5. Phone camera works because LocalTunnel provides HTTPS.
+6. On `/host`, use the **OBS View Controls** section to adjust fit, mirror, and rotation.
+7. Open `/obs?room=ROOM_ID` in OBS Browser Source — it receives the video and applies host controls live.
 
-- `fit=cover` (default) - video covers the viewport.
-- `fit=contain` - video fits within the viewport.
-- `mirror=true` - horizontally mirror the video.
+## OBS View Controls (on /host)
 
-Example: `/obs?room=abc123&fit=cover&mirror=false`
+The host page has an **OBS View Controls** section that updates the OBS page live through WebSocket.
+
+**Fit:**
+- `contain` — video fits entirely within the viewport (letterboxed).
+- `cover` — video fills the viewport (may crop).
+
+**Mirror:**
+- Toggle horizontal mirror on/off.
+
+**Rotate:**
+- Rotate the video 0°, 90° clockwise, 180°, or 270°.
+
+**Reset:**
+- Returns to contain + mirror off + 0°.
+
+Controls apply immediately to the OBS page. No refresh needed.
+
+## OBS page
+
+The OBS page at `/obs?room=ROOM_ID` is designed for Browser Source capture.
+
+Query parameters work as fallback defaults (overridden by host controls once received):
+- `fit=cover` or `fit=contain`
+- `mirror=true` or `mirror=false`
+- `rotate=0`, `90`, `180`, or `270`
+
+Example with all params:
+
+```
+https://SUBDOMAIN.loca.lt/obs?room=ROOM_ID&fit=contain&rotate=90&mirror=true
+```
 
 Keyboard shortcuts on the OBS page:
-- `f` - toggle fit between cover and contain.
-- `m` - toggle mirror.
-- `h` - toggle help overlay.
+- `f` — toggle fit between cover and contain.
+- `m` — toggle mirror.
+- `h` — toggle help overlay.
 
-## HTTPS (if needed)
+### Rotation notes
 
-Mobile browsers often require a secure context for camera access. `localhost` works without HTTPS, but if your phone accesses the PC by LAN IP, you may need HTTPS.
+- Use `rotate=90` when the phone is held vertically and you want the video to fill a landscape OBS canvas.
+- `rotate=180` for upside-down mounting.
+- `fit=contain` avoids cropping.
+- `fit=cover` may crop intentionally to fill the viewport.
 
-### Using mkcert
+## Phone camera / lens switching
 
-```bash
-# Install mkcert (one time)
-# Windows: choco install mkcert
-# Linux: sudo apt install mkcert  or  brew install mkcert
+The `/phone` page shows all cameras/lenses exposed by the browser's `enumerateDevices()` API.
 
-mkcert -install
-mkdir certs
-cd certs
-mkcert 0.0.0.0 localhost 192.168.x.x  # replace with your LAN IP
-cd ..
-```
+Features:
+- **Camera selector dropdown** — shows all available `videoinput` devices with friendly labels.
+- **Selfie button** — selects the front camera.
+- **Back Camera button** — selects the rear/default camera.
+- **Next Camera button** — cycles through available cameras.
 
-Then run with HTTPS:
+When switching cameras:
+- The video track is replaced on all connected peers using `RTCRtpSender.replaceTrack()`.
+- No reconnection needed.
+- If `replaceTrack` fails, the connection is recreated automatically.
 
-```bash
-npm install
-node server.js --https
-```
+**Note on lens availability:** Some phones may not expose ultra-wide or telephoto lenses separately. Android Chrome generally exposes more cameras than iPhone Safari. Labels depend on what the browser and device driver expose.
 
-### Using a tunnel
+## LocalTunnel
 
-Use ngrok, bore, or similar:
+LocalTunnel is automatically started when the server runs.
 
-```bash
-ngrok http 3000
-```
+- The app uses the `localtunnel` npm package, not a CLI tool.
+- No manual tunnel setup needed.
+- The tunnel URL is printed in the terminal.
+- If the tunnel fails, the local server still runs and shows a fallback message.
+- Phone camera requires HTTPS; LocalTunnel provides this automatically.
 
-Then open the ngrok URL on your phone.
+If LocalTunnel shows a password/interstitial page, follow the on-screen instructions (usually just click to confirm).
+
+## OBS Browser Source settings
+
+Recommended settings for the Browser Source:
+
+- Width: 1920
+- Height: 1080
+- Control audio via OBS: unchecked (no audio stream)
+- Refresh browser when scene becomes active: recommended
 
 ## Firewall troubleshooting
 
@@ -134,25 +180,26 @@ Then open the ngrok URL on your phone.
 
 - Use Chrome/Edge on Android.
 - Use Safari/Chrome on iPhone.
-- If camera permission does not appear, use HTTPS.
+- If tunnel is active, camera permission should work over HTTPS.
 - If the video shows black, refresh both phone and host pages.
 - Try `fit=contain` if the video is cropped on the OBS page.
-- Ensure the phone has rear camera available.
-
-## OBS Browser Source settings
-
-Recommended settings for the Browser Source:
-
-- Width: 1920
-- Height: 1080
-- Control audio via OBS: unchecked (no audio stream)
-- Refresh browser when scene becomes active: recommended
+- Ensure the phone has a camera available.
 
 ## Architecture
 
 PhoneCamBridge uses WebRTC for browser-to-browser video streaming. Signaling is handled via WebSocket. No data is sent through external servers beyond the initial STUN lookup.
 
 - Phone: captures camera, sends video track via WebRTC.
-- Host PC: receives video, shows preview, generates QR code.
-- OBS page: receives the same video stream for OBS capture.
-- All communication stays on your LAN.
+- Host PC: receives video, shows preview, generates QR code, controls OBS settings.
+- OBS page: receives the same video stream for OBS capture, applies host-controlled settings.
+- LocalTunnel: provides HTTPS tunnel for phone camera access in mobile browsers.
+- All peer-to-peer video stays on your LAN (WebRTC uses LAN routes when available).
+
+### Tech stack
+
+- Node.js with Express
+- ws WebSocket for signaling and OBS controls
+- qrcode for QR code generation
+- localtunnel for automatic HTTPS tunnel
+- Vanilla HTML/CSS/JS on the frontend
+- WebRTC for video streaming

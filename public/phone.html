@@ -11,11 +11,26 @@
     <h1>PhoneCamBridge</h1>
     <div id="status">Ready</div>
     <video id="local-video" autoplay playsinline muted></video>
+
     <div class="controls">
       <button id="start-camera" class="primary">Start Camera</button>
-      <button id="switch-camera" disabled>Switch Camera</button>
+      <button id="btn-selfie">Selfie</button>
+      <button id="btn-back">Back Camera</button>
+      <button id="btn-next">Next Camera</button>
       <button id="reconnect">Reconnect</button>
     </div>
+
+    <div id="camera-selector-wrapper">
+      <label class="label" for="camera-select">Camera:</label>
+      <select id="camera-select" disabled>
+        <option value="">Loading cameras...</option>
+      </select>
+    </div>
+
+    <div id="camera-note">
+      Available lenses depend on what your browser exposes. Some phones may hide ultra-wide or telephoto lenses.
+    </div>
+
     <div id="error"></div>
   </div>
   <script src="/shared.js"></script>
