@@ -38,9 +38,7 @@
       document.getElementById('phone-url').textContent = phoneUrl;
       document.getElementById('obs-url').textContent = obsUrl;
 
-      if (cfg.usingTunnel) {
-        setTunnelStatus('Connected', 'ok');
-      } else if (publicUrl) {
+      if (cfg.publicUrl) {
         setTunnelStatus(cfg.publicUrl, 'ok');
       } else {
         setTunnelStatus('Not available (HTTPS may be needed for phone)', 'warn');
